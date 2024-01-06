@@ -1,1 +1,3 @@
-// testene settes inn her; disse vil ikke kompilert så lenge denne pakken blir brukt som en utvidelse.
+basic.showIcon(IconNames.Happy)
+fingerprint.connect(SerialPin.P1, SerialPin.P0)
+fingerprint.verifyPassword()
