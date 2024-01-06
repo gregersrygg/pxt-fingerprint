@@ -89,9 +89,9 @@ namespace fingerprint {
         buf.setNumber(NumberFormat.UInt16BE, 7, dataLen)
         buf.write(9, data)
 
-        let checksum = pid + (dataLen >> 8) + (dataLen & 0xFF);
-        for (let i=0; i<data.length; i++) {
-            checksum += data.getNumber(NumberFormat.UInt8BE, i)
+        let checksum = 0
+        for (let i=6; i<bufLen-2; i++) {
+            checksum += buf.getNumber(NumberFormat.UInt8BE, i)
         }
 
         buf.setNumber(NumberFormat.UInt16BE, 9 + data.length, checksum & 0xFFFF)
