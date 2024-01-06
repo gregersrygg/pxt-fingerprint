@@ -4,10 +4,18 @@
 //% weight=100 color=#f81e96 icon="\uf577" block="Fingerprint"
 namespace fingerprint {
     const DEBUG = false
+    const HEADER_ID = 0xEF01
 
     enum CMD {
         OK = 0x0,
         VERIFY_PWD = 0x13,
+    }
+
+    enum PID {
+        CMD_PACKET = 0x1,
+        DATA_PACKET = 0x2,
+        ACK_PACKET = 0x7,
+        END_DATA_PACKET = 0x8,
     }
 
     enum RET_CODE {
@@ -55,10 +63,14 @@ namespace fingerprint {
         dataBuf.setNumber(NumberFormat.UInt8BE, 0, CMD.VERIFY_PWD);
         dataBuf.setNumber(NumberFormat.UInt32BE, 1, 0x00000000)
         
-        tx(createTxBuf(0x1, dataBuf))
+        tx(createTxBuf(PID.CMD_PACKET, dataBuf))
 
-        const res = serial.readBuffer(12)
-        const code = res.getUint8(9)
+        const res = parseResponse()
+        if (res.pid != PID.ACK_PACKET) {
+            problemEncountered()
+        }
+
+        const code = res.code
         if (code == RET_CODE.EXECUTION_COMPLETE) {
             basic.showIcon(IconNames.Yes)
         } else if (code == RET_CODE.WRONG_PASSWORD) {
@@ -83,7 +95,7 @@ namespace fingerprint {
             data.length + // data
             2 // checksum
         const buf = pins.createBuffer(bufLen)
-        buf.setNumber(NumberFormat.UInt16BE, 0, 0xEF01)
+        buf.setNumber(NumberFormat.UInt16BE, 0, HEADER_ID)
         buf.setNumber(NumberFormat.UInt32BE, 2, 0xFFFFFFFF)
         buf.setNumber(NumberFormat.UInt8BE, 6, pid)
         buf.setNumber(NumberFormat.UInt16BE, 7, dataLen)
@@ -103,7 +115,38 @@ namespace fingerprint {
         serial.writeBuffer(bytes)
     }
 
+    function parseResponse() {
+        const headerLen = 9
+        const headerBuf = serial.readBuffer(headerLen)
+        const res = {
+            headerId: headerBuf.getNumber(NumberFormat.UInt16BE, 0),
+            adder: headerBuf.getNumber(NumberFormat.UInt32BE, 2),
+            pid: headerBuf.getNumber(NumberFormat.UInt8BE, 6),
+            length: headerBuf.getNumber(NumberFormat.UInt16BE, 7),
+            code: -1,
+            checksum: 0,
+            data: pins.createBuffer(0),
+        }
+
+        if (res.headerId != HEADER_ID) {
+            problemEncountered()
+        }
+
+        const dataBuf = serial.readBuffer(res.length)
+        res.code = dataBuf.getNumber(NumberFormat.UInt8BE, 0)
+        res.checksum = dataBuf.getNumber(NumberFormat.UInt16BE, res.length - 2)
+
+        if (res.length > 3) {
+            res.data = dataBuf.slice(1, res.length - 3)
+        }
+
+        return res
+    }
+
     function problemEncountered(): void {
         basic.showIcon(IconNames.Skull)
+        while (true) {
+            basic.pause(1000)
+        }
     }
 }
