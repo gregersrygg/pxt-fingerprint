@@ -1,3 +1,23 @@
+interface Uart {
+    writeBuffer(buf: Buffer): void
+    readBuffer(len: number): Buffer
+}
+
+class SerialUart implements Uart {
+    constructor(rx: SerialPin, tx: SerialPin) {
+        serial.setRxBufferSize(128)
+        serial.redirect(tx, rx, BaudRate.BaudRate57600)
+    }
+
+    writeBuffer(buf: Buffer): void {
+        serial.writeBuffer(buf)
+    }
+
+    readBuffer(len: number): Buffer {
+        return serial.readBuffer(len)
+    }
+}
+    
 /**
  * Fingerprint blocks
  */
@@ -6,6 +26,7 @@ namespace fingerprint {
     const DEBUG = false
     const HEADER_ID = 0xef01
     const DEFAULT_ADDR = 0xffffffff
+    let uart: Uart
 
     interface SystemParameters {
         loaded: boolean
@@ -97,8 +118,9 @@ namespace fingerprint {
 
         // At power on, it takes about 200ms for initialization
         basic.pause(250)
-        serial.setRxBufferSize(128)
-        serial.redirect(tx, rx, BaudRate.BaudRate57600)
+        uart = new SerialUart(rx, tx)
+        // uart.setRxBufferSize(128)
+        // uart.redirect(tx, rx, BaudRate.BaudRate57600)
         basic.pause(1000)
 
         if (DEBUG) {
@@ -106,6 +128,10 @@ namespace fingerprint {
                 basic.showIcon(IconNames.Square)
             })
         }
+    }
+
+    export function setUart(u: Uart): void {
+        uart = u
     }
 
     export function verifyPassword(): boolean {
@@ -361,7 +387,7 @@ namespace fingerprint {
     }
 
     function tx(bytes: Buffer): void {
-        serial.writeBuffer(bytes)
+        uart.writeBuffer(bytes)
     }
 
     interface CommandResponse {
@@ -376,7 +402,7 @@ namespace fingerprint {
 
     function parseResponse(): CommandResponse {
         const headerLen = 9
-        const headerBuf = serial.readBuffer(headerLen)
+        const headerBuf = uart.readBuffer(headerLen)
         let res = {
             headerId: headerBuf.getNumber(NumberFormat.UInt16BE, 0),
             adder: headerBuf.getNumber(NumberFormat.UInt32BE, 2),
@@ -393,7 +419,7 @@ namespace fingerprint {
             problemEncountered(ERR_MSG.ERROR_UNEXPECTED_HEADER_ID)
         }
         
-        const dataBuf = serial.readBuffer(res.length)
+        const dataBuf = uart.readBuffer(res.length)
         res.code = dataBuf.getNumber(NumberFormat.UInt8BE, 0)
         res.checksum = dataBuf.getNumber(NumberFormat.UInt16BE, res.length - 2)
         

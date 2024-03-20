@@ -11,6 +11,7 @@
         "README.md"
     ],
     "testFiles": [
+        "fingerprintSimulator.ts",
         "test.ts"
     ],
     "targetVersions": {

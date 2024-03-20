@@ -1,7 +1,8 @@
 basic.showIcon(IconNames.Happy)
 fingerprint.connect(SerialPin.P1, SerialPin.P0)
-
-fingerprint.emptyAllFingers()
+let simulator = new FingerprintSimulator()
+fingerprint.setUart(simulator)
+//fingerprint.emptyAllFingers()
 //fingerprint.verifyPassword()
 //basic.showIcon(IconNames.House)
 //fingerprint.readParameters()
