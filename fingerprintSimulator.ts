@@ -49,8 +49,49 @@ enum RET_CODE {
 
 const DEFAULT_PASSWORD = 0x0
 
+interface StatusRegister {
+    busy: boolean
+    matchingFinger: boolean
+    passwordVerified: boolean
+    imageBufStatus: boolean
+}
+
+interface SystemParameters {
+    statusRegister: StatusRegister
+    systemIdentifier: number
+    librarySize: number
+    securityLevel: number
+    deviceAddress: number
+    dataPacketSize: number
+    baudRate: number
+}
+
+const parameters: SystemParameters = {
+    statusRegister: {
+        busy: false,
+        matchingFinger: false,
+        passwordVerified: false,
+        imageBufStatus: false
+    },
+    systemIdentifier: 0x9,
+    librarySize: 0x10,
+    securityLevel: 0x1, // 1-5, 1 lowest, 5 highest
+    deviceAddress: 0xffffffff,
+    dataPacketSize: 0x2, // 128 bytes
+    baudRate: 0x6, // 57600 (n*9600)
+}
+
 function debug(msg: string) {
     console.log(msg)
+}
+
+function statusReg2Word(status: StatusRegister): number {
+    let word = 0
+    word |= status.busy ? 1 : 0
+    word |= status.matchingFinger ? 1 << 1 : 0
+    word |= status.passwordVerified ? 1 << 2 : 0
+    word |= status.imageBufStatus ? 1 << 3 : 0
+    return word
 }
 
 interface Command {
@@ -112,6 +153,9 @@ class FingerprintSimulator implements Uart {
                 break
             case CMD.CREATE_FINGER:
                 this.responseBuffer = createFinger(cmd)
+                break
+            case CMD.READ_SYS_PARA:
+                this.responseBuffer = readSystemParameters(cmd)
                 break
             case CMD.VERIFY_PWD:
                 this.responseBuffer = verifyPassword(cmd)
@@ -185,12 +229,27 @@ function createFinger(cmd: Command): Buffer {
     return createResponse(cmd, data)
 }
 
+function readSystemParameters(cmd: Command): Buffer {
+    const data = pins.createBuffer(17)
+    data.setNumber(NumberFormat.UInt8BE, 0, RET_CODE.EXECUTION_COMPLETE)
+
+    data.setNumber(NumberFormat.UInt16BE, 1, statusReg2Word(parameters.statusRegister))
+    data.setNumber(NumberFormat.UInt16BE, 3, parameters.systemIdentifier)
+    data.setNumber(NumberFormat.UInt16BE, 5, parameters.librarySize)
+    data.setNumber(NumberFormat.UInt16BE, 7, parameters.securityLevel)
+    data.setNumber(NumberFormat.UInt32BE, 9, parameters.deviceAddress)
+    data.setNumber(NumberFormat.UInt16BE, 13, parameters.dataPacketSize)
+    data.setNumber(NumberFormat.UInt16BE, 15, parameters.baudRate)
+    return createResponse(cmd, data)
+}
+
 function verifyPassword(cmd: Command): Buffer {
     const data = pins.createBuffer(1)
     const userPassword = cmd.data.getNumber(NumberFormat.UInt32BE, 0)
 
     if (userPassword == DEFAULT_PASSWORD) {
         data.setNumber(NumberFormat.UInt8BE, 0, RET_CODE.EXECUTION_COMPLETE)
+        parameters.statusRegister.passwordVerified = true
     } else {
         data.setNumber(NumberFormat.UInt8BE, 0, RET_CODE.WRONG_PASSWORD)
     }
